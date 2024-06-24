@@ -8,7 +8,7 @@ class CutCalculator:
         self.radial_graph = radial_graph
         self.load_flow_calculator = load_flow_calculator
 
-    def get_cut_slopes_intercepts(self, v_properties: dict, include_losses: bool) -> Tuple[Dict]:
+    def get_cut_slopes_intercepts(self, v_properties: dict, include_losses: bool, loss_parameter: float = 0.5) -> Tuple[Dict]:
         # TODO: remove redundant print statements
         """
         This function calculates the slopes and the intercepts of the linear voltage cuts
@@ -28,6 +28,15 @@ class CutCalculator:
             * a reactive power term depending on the loads at te begining of the iteration
             * a reactive power term depending on the fill factors of the loads that are being filled that iteration
             * (a reactive power term depending on the losses)
+
+        The loss parameter is a parameter within [0, 1], which expresses for the estimation of the branch flows for
+        the loss calculation how much of the weight is on the branch flows of the beginning/end of the bucket fill
+        iteration.
+
+        Example:
+            loss_parameter = 0: losses are calculated based on the branch flows at the beginning of the iteration
+            loss_parameter = 1: losses are calculated based on the branch flows at the end of the iteration
+            loss_parameter = 0.5: branch flows are the weighted sum of the flows at the beginning/end of the iteration
         """
         # First calculate the voltage term
         v_term_intercept = self._calculate_voltage_intercept_term(v_properties)
@@ -63,7 +72,12 @@ class CutCalculator:
 
         # Add losses if necessary
         if include_losses:
-            p_loss_term_dict, q_loss_term_dict = self._calculate_loss_terms(active_info, reactive_info, v_properties)
+            assert loss_parameter >= 0, "Please provide a loss parameter >= 0"
+            assert loss_parameter <= 1, "Please provide a loss parameter <= 1"
+            p_loss_term_dict, q_loss_term_dict = self._calculate_loss_terms(active_info,
+                                                                            reactive_info,
+                                                                            v_properties,
+                                                                            loss_parameter)
             for cut_id in intercepts:
                 j = cut_id[1]
                 denominator_slope = denominators_slope[j - 1]
@@ -162,7 +176,8 @@ class CutCalculator:
     def _calculate_loss_terms(self,
                              active_bucket_filling_information: dict,
                              reactive_bucket_filling_information: dict,
-                             v_properties: dict) -> Tuple[Dict[Tuple, float]]:
+                             v_properties: dict,
+                             loss_parameter: float) -> Tuple[Dict[Tuple, float]]:
 
         # TODO: remove redundant print statements
         active_power_loss_term_dict = dict()
@@ -179,7 +194,8 @@ class CutCalculator:
             active_destination_node = active_iteration_info['to_fill_nodes'][0]
             active_loads_start = active_iteration_info['loads_start']
             active_loads_end = active_iteration_info['loads_end']
-            active_loads = {n_name: 0.5 * (active_loads_start[n_name] + active_loads_end[n_name]) for n_name in active_loads_start}
+            loss_parameter = 0.5
+            active_loads = {n_name: (loss_parameter * active_loads_start[n_name] + (1 - loss_parameter) * active_loads_end[n_name]) for n_name in active_loads_start}
             # active_loads = active_iteration_info['loads_start']
             loads_p = list(
                 {n_name: active_loads[n_name] for n_name in active_loads if n_name != 'Root'}.values())
@@ -189,7 +205,7 @@ class CutCalculator:
                 reactive_destination_node = reactive_iteration_info['to_fill_nodes'][0]
                 reactive_loads_start = reactive_iteration_info['loads_start']
                 reactive_loads_end = reactive_iteration_info['loads_end']
-                reactive_loads = {n_name: 0.5 * (reactive_loads_start[n_name] + reactive_loads_end[n_name]) for n_name in
+                reactive_loads = {n_name: (loss_parameter * active_loads_start[n_name] + (1 - loss_parameter) * active_loads_end[n_name]) for n_name in
                                 reactive_loads_start}
                 # reactive_loads = reactive_iteration_info['loads_start']
                 loads_q = list({n_name: reactive_loads[n_name] for n_name in reactive_loads if

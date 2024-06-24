@@ -80,9 +80,20 @@ if __name__ == "__main__":
 
     '''
     Calculate voltage cuts
+    
+    The loss parameter is a parameter within [0, 1], which expresses for the estimation of the branch flows for
+    the loss calculation how much of the weight is on the branch flows of the beginning/end of the bucket fill 
+    iteration.
+    
+    Example:
+        loss_parameter = 0: losses are calculated based on the branch flows at the beginning of the iteration
+        loss_parameter = 1: losses are calculated based on the branch flows at the end of the iteration
+        loss_parameter = 0.5: branch flows are the average of the flows at the beginning/end of the iteration
     '''
     slopes, intercepts = cut_calculator.get_cut_slopes_intercepts(v_properties, include_losses=False)
-    slopes_losses, intercepts_losses = cut_calculator.get_cut_slopes_intercepts(v_properties, include_losses=True)
+    slopes_losses, intercepts_losses = cut_calculator.get_cut_slopes_intercepts(v_properties,
+                                                                                include_losses=True,
+                                                                                loss_parameter=0.5)
 
     '''
     Plotting
