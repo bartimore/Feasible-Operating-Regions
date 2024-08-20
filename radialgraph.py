@@ -120,24 +120,21 @@ class RadialGraph:
 
         # Create lines
         # Params
-        r0_ohm_per_km = 1.5 * 1.64  # Ohm/km
-        x0_ohm_per_km = 1.5 * 0.15  # Ohm/km
-        c0_nf_per_km = 1.5 * 0.32 * 1.0e3  # nF/km
-        max_i_ka = 100 * 110 * 1.0e-3  # kA
+        max_i_ka = 100  # kA
+        max_loading_percent = 100.0
 
         for i, e in enumerate(self.edges):
             from_bus = name_nodes_map[e.node1.name]
             to_bus = name_nodes_map[e.node2.name]
             r_ohm_per_km = e.resistance
             x_ohm_per_km = e.reactance
-            c_nf_per_km = 1.5 * 0.32 * 1.0e3  # nF/km
+            c_nf_per_km = 0.0  # nF/km
 
             pp.create_line_from_parameters(net, from_bus=from_bus, to_bus=to_bus, length_km=1.0,
                                            r_ohm_per_km=r_ohm_per_km,
                                            x_ohm_per_km=x_ohm_per_km, c_nf_per_km=c_nf_per_km, max_i_ka=max_i_ka,
-                                           name="Line" + str(i), r0_ohm_per_km=r0_ohm_per_km,
-                                           x0_ohm_per_km=x0_ohm_per_km,
-                                           c0_nf_per_km=c0_nf_per_km)
+                                           name="Line" + str(i), max_loading_percent=max_loading_percent,
+                                           )
 
         self.pp_representation = net
 

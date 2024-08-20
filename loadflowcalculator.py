@@ -40,17 +40,15 @@ class LoadFlowCalculator:
         net.bus['vn_kv'] = np.sqrt(v2_root) * np.sqrt(3) / 1000.0
 
         # Do power flow
-        pp.runpp_3ph(net)
+        pp.runpp(net, check_connectivity=True)
 
         # Get results
-        buses = net.res_bus_3ph
-        lines = net.res_line_3ph[['i_a_from_ka', 'i_b_from_ka', 'i_c_from_ka', 'i_n_from_ka', 'loading_percent',
-                                  'p_a_from_mw', 'q_a_from_mvar', 'p_b_from_mw', 'q_b_from_mvar',
-                                  'p_c_from_mw', 'q_c_from_mvar']]
+        buses = net.res_bus
+        lines = net.res_line[['p_from_mw', 'q_from_mvar']]
 
-        P_edges = list(3 * lines['p_a_from_mw'].values * 1.0e3)
-        Q_edges = list(3 * lines['q_a_from_mvar'].values * 1.0e3)
-        v_nodes = list((buses['vm_a_pu'] * net.bus['vn_kv'] * 1.0e3 / np.sqrt(3)).values)
+        P_edges = list(lines['p_from_mw'].values * 1.0e3)
+        Q_edges = list(lines['q_from_mvar'].values * 1.0e3)
+        v_nodes = list((buses['vm_pu'] * net.bus['vn_kv'] * 1.0e3 / np.sqrt(3)).values)
 
         return {'P_edges': P_edges, 'Q_edges': Q_edges, 'v_nodes': v_nodes}
 

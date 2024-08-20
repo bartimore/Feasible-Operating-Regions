@@ -1,4 +1,4 @@
-from create_graphs import create_linear_graph, create_simple_branch_graph, create_graph
+from create_graphs import create_linear_graph, create_simple_branch_graph, create_graph, create_IEEE33bus
 from loadflowcalculator import LoadFlowCalculator
 from cutcalculator import CutCalculator
 import numpy as np
@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     # Create a radial graph
-    graph = create_linear_graph()
+    graph = create_IEEE33bus()
 
     # Create loadflow calculator
     load_flow_calculator = LoadFlowCalculator(graph)
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     cut_calculator = CutCalculator(graph, load_flow_calculator)
 
     # Set voltage parameters
-    v_base = 230.94
+    v_base = 12.66 * 1.0e3 / np.sqrt(3)  # 12.66 * 1.0e3
     v_min = 0.95 * v_base
     v_properties = {'v_base': v_base, 'v_min': v_min}
 
@@ -25,16 +25,12 @@ if __name__ == "__main__":
     Calculate the sampled FOR
     '''
     # Create total active and reactive load linspaces
-    n_points = 41
+    n_points = 11
     max_active_power = sum([n.p_max for n in graph.nodes])
     max_reactive_power = sum([n.q_max for n in graph.nodes])
 
     p_totals = np.linspace(0, max_active_power, n_points)
     q_totals = np.linspace(0, max_reactive_power, n_points)
-
-    # Set voltage parameters
-    v_base = 230.94
-    v_min = 0.95 * v_base
 
     # Allocate result lists
     Ps_transformer = []
@@ -90,10 +86,13 @@ if __name__ == "__main__":
         loss_parameter = 1: losses are calculated based on the branch flows at the end of the iteration
         loss_parameter = 0.5: branch flows are the average of the flows at the beginning/end of the iteration
     '''
+
+    '''
     slopes, intercepts = cut_calculator.get_cut_slopes_intercepts(v_properties, include_losses=False)
     slopes_losses, intercepts_losses = cut_calculator.get_cut_slopes_intercepts(v_properties,
-                                                                                include_losses=True,
-                                                                                loss_parameter=0.5)
+                                                                               include_losses=True,
+                                                                               loss_parameter=0.5)
+    '''
 
     '''
     Plotting
@@ -103,6 +102,7 @@ if __name__ == "__main__":
     plt.scatter(Ps_transformer_no_loss, Qs_transformer_no_loss, color='r', label='Linear Distflow')
 
     # Cuts
+    '''
     cut_ids = slopes.keys()
     cut_ids_to_show = cut_ids
     cut_ids_losses_to_show = cut_ids
@@ -122,4 +122,5 @@ if __name__ == "__main__":
         plt.plot(p_totals, q_values_losses / 1000.0, 'b', label=str(cut_id))
 
     plt.legend()
+    '''
     plt.show()
