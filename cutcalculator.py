@@ -1,6 +1,7 @@
 from radialgraph import RadialGraph
 from loadflowcalculator import LoadFlowCalculator
 from typing import Tuple, List, Dict
+import numpy as np
 
 
 class CutCalculator:
@@ -189,44 +190,49 @@ class CutCalculator:
         # Calculate loss terms with nested for loop, as the losses in P depend on both P and Q etc.
         print("Calculate Loss terms:")
         for i in range(1, len(active_bucket_filling_information) + 1):  # number of iterations <= number of node
-            print(f"Iteration p: {i}")
+            # print(f"Iteration p: {i}")
             active_iteration_info = active_bucket_filling_information['iteration_' + str(i)]
             active_destination_node = active_iteration_info['to_fill_nodes'][0]
             active_loads_start = active_iteration_info['loads_start']
             active_loads_end = active_iteration_info['loads_end']
-            loss_parameter = 0.5
             active_loads = {n_name: (loss_parameter * active_loads_start[n_name] + (1 - loss_parameter) * active_loads_end[n_name]) for n_name in active_loads_start}
             # active_loads = active_iteration_info['loads_start']
-            loads_p = list(
-                {n_name: active_loads[n_name] for n_name in active_loads if n_name != 'Root'}.values())
+            loads_p = list({n_name: active_loads[n_name] for n_name in active_loads if n_name != 'Root'}.values())
             for j in range(1, len(reactive_bucket_filling_information) + 1):  # number of iterations <= number of nodes
-                print(f"Iteration q: {j}")
+                # print(f"Iteration q: {j}")
                 reactive_iteration_info = reactive_bucket_filling_information['iteration_' + str(j)]
                 reactive_destination_node = reactive_iteration_info['to_fill_nodes'][0]
                 reactive_loads_start = reactive_iteration_info['loads_start']
                 reactive_loads_end = reactive_iteration_info['loads_end']
-                reactive_loads = {n_name: (loss_parameter * active_loads_start[n_name] + (1 - loss_parameter) * active_loads_end[n_name]) for n_name in
-                                reactive_loads_start}
+                reactive_loads = {n_name: (loss_parameter * reactive_loads_start[n_name] + (1 - loss_parameter) *
+                                           reactive_loads_end[n_name]) for n_name in reactive_loads_start}
                 # reactive_loads = reactive_iteration_info['loads_start']
                 loads_q = list({n_name: reactive_loads[n_name] for n_name in reactive_loads if
                                 n_name != 'Root'}.values())
 
-                print(f"active_destination_node: {active_destination_node.name}")
-                print(f"reactive_destination_node: {reactive_destination_node.name}")
+                # print(f"active_destination_node: {active_destination_node.name}")
+                # print(f"reactive_destination_node: {reactive_destination_node.name}")
 
                 # Calculate powerflow and losses based on loads from previous iteration
-                print("check loads:", loads_p, loads_q)
+                # print("check loads:", loads_p, loads_q)
                 v_base = v_properties['v_base']
                 lf_results = self.load_flow_calculator.do_lossless_loadflow(loads_p, loads_q, v_base**2)
                 edge_flow_losses_per_ohm = [(P ** 2 + Q ** 2) / v_base ** 2 for P, Q in
                                             zip(lf_results['P_edges'], lf_results['Q_edges'])]
+
+                net = self.radial_graph.pp_representation
+                rs = (net.line['r_ohm_per_km'] * net.line['length_km']).values
+                xs = (net.line['x_ohm_per_km'] * net.line['length_km']).values
+
                 assert len(edge_flow_losses_per_ohm) == len(self.radial_graph.edges), "not the same number of losses for every edge"
                 node2_flow_losses_per_ohm_map = {edge_nr_node2_name_map[e_nr]: loss for e_nr, loss in
                                                  enumerate(edge_flow_losses_per_ohm)}
 
-                print("Losses per ohm:")
-                print(lf_results)
-                print(node2_flow_losses_per_ohm_map)
+                node2_p_losses_map = {edge_nr_node2_name_map[e_nr]: loss * rs[e_nr] for e_nr, loss in
+                                                 enumerate(edge_flow_losses_per_ohm)}
+
+                node2_q_losses_map = {edge_nr_node2_name_map[e_nr]: loss * xs[e_nr] for e_nr, loss in
+                                                 enumerate(edge_flow_losses_per_ohm)}
 
                 # Loop 1 for outer sum over the path
                 p_loss_term_intercept = 0.0
@@ -237,17 +243,16 @@ class CutCalculator:
                     tree = edge.node2.get_nodes_in_tree()
                     not_tree = [n for n in self.radial_graph.nodes if n.name not in [m.name for m in tree]]
                     # not_tree = list(set(graph.nodes).difference(set(tree)))
-                    print(f"Tree: {[n.name for n in tree]}")
-                    print(f"Nodes: {[n.name for n in self.radial_graph.nodes]}")
-                    print(f"Not Tree: {[n.name for n in not_tree]}")
+                    # print(f"Tree: {[n.name for n in tree]}")
+                    # print(f"Nodes: {[n.name for n in self.radial_graph.nodes]}")
+                    # print(f"Not Tree: {[n.name for n in not_tree]}")
 
-                    print(f"Nodes: {[n.p_max for n in self.radial_graph.nodes]}")
-                    print(f"Not Tree: {[n.p_max for n in not_tree]}")
+                    # print(f"Nodes: {[n.p_max for n in self.radial_graph.nodes]}")
+                    # print(f"Not Tree: {[n.p_max for n in not_tree]}")
                     # Loop 2 for inner sum over the nodes in the not tree
                     for n in not_tree:
                         if n.name != 'Root':
-                            p_loss_term_intercept += r ** 2 * node2_flow_losses_per_ohm_map[
-                                n.name]  # rP = r^2 P_per_ohm
+                            p_loss_term_intercept += r * node2_p_losses_map[n.name]
 
                 for edge in reactive_destination_node.get_edge_path():
                     x = edge.reactance
@@ -256,11 +261,10 @@ class CutCalculator:
                     # Loop 2 for inner sum over the nodes in the not tree
                     for n in not_tree:
                         if n.name != 'Root':
-                            q_loss_term_intercept += x ** 2 * node2_flow_losses_per_ohm_map[
-                                n.name]  # xQ = x^2 Q_per_ohm
+                            q_loss_term_intercept += x * node2_q_losses_map[n.name]
 
-                print(f"p_loss_term_intercept: {p_loss_term_intercept}")
-                print(f"q_loss_term_intercept: {q_loss_term_intercept}")
+                # print(f"p_loss_term_intercept: {p_loss_term_intercept}")
+                # print(f"q_loss_term_intercept: {q_loss_term_intercept}")
 
                 active_power_loss_term_dict[(i, j)] = p_loss_term_intercept
                 reactive_power_loss_term_dict[(i, j)] = q_loss_term_intercept
