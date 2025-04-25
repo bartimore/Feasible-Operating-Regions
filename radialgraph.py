@@ -8,8 +8,8 @@ import pandapower as pp
 class Node:
     def __init__(self, name: str, p_max: float, q_max: float):
         # Apply checks
-        assert p_max >= 0, "Please don't use only positive values (loads) for p_max"
-        assert q_max >= 0, "Please don't use only positive values (loads) for q_max"
+        # assert p_max >= 0, "Please don't use only positive values (loads) for p_max"
+        # assert q_max >= 0, "Please don't use only positive values (loads) for q_max"
 
         self.name = name
         self.p_max = p_max
@@ -188,7 +188,7 @@ class RadialGraph:
         max_load_type = load_type + '_max'  # either p_max or q_max
 
         # Do some input tests
-        assert load_to_fill <= sum([getattr(n, max_load_type) for n in self.nodes]), "provided load_to_fill is too big"
+        assert load_to_fill <= abs(sum([getattr(n, max_load_type) for n in self.nodes])), "provided load_to_fill is too big"
 
         # Allocate output: how much load to put at every node
         loads = {n.name: 0.0 for n in self.nodes}
@@ -208,7 +208,7 @@ class RadialGraph:
             iteration_information['loads_end'] = loads.copy()
             information_dict['iteration_' + str(iteration)] = iteration_information
 
-        while round(load_to_fill, 5) > 0.0:  # round is for preventing small residual load due to floating point errors
+        while abs(round(load_to_fill, 5)) > 0.0:  # round is for preventing small residual load due to floating point errors
             # print(f"load_to_fill: {load_to_fill}")
             # print(f"nodes_to_fill: {[n.name for n in nodes_to_fill]}")
             # Set up dict to store outputs
@@ -221,13 +221,14 @@ class RadialGraph:
             fill_factors = self._calculate_fill_factors(edge_prop_paths)
 
             # Find the loads that are first the be full given the fill factors
-            total_load_full = [remaining_bucket_sizes[n.name] / fill_factors[i] for i, n in enumerate(nodes_to_fill)]
+            total_load_full = [abs(remaining_bucket_sizes[n.name]) / fill_factors[i] for i, n in enumerate(nodes_to_fill)]
             # print(f'Total load full: {total_load_full}')
             min_total_load_full = min(total_load_full)
             nodes_max_fill = [n for i, n in enumerate(nodes_to_fill) if total_load_full[i] == min_total_load_full]
 
             # Constrain the total amount of filling by the amount that is left to fill
-            total_fill = min(min_total_load_full, load_to_fill)
+            # take care of sign. for loads, we can remove the abs and the sign
+            total_fill = np.sign(load_to_fill) * min(abs(min_total_load_full), abs(load_to_fill))
             fills = [factor * total_fill for factor in fill_factors]
             # print(f'Total fill: {total_fill}')
             # print(f'fills: {fills}')
@@ -246,7 +247,7 @@ class RadialGraph:
             # print(f'New remaining_bucket_sizes: {remaining_bucket_sizes}')
 
             # Check whether we have leftover load to fill. If so, update nodes_to_fill
-            if load_to_fill > total_fill:
+            if abs(load_to_fill) > abs(total_fill):
                 # print("NOT FULL THIS ROUND", load_to_fill, total_fill)
                 # print(f'Old nodes to fill: {[n.name for n in nodes_to_fill]}')
                 # print(f'Nodes full: {[n.name for n in nodes_max_fill]}')
