@@ -39,14 +39,21 @@ class CutCalculator:
             loss_parameter = 1: losses are calculated based on the branch flows at the end of the iteration
             loss_parameter = 0.5: branch flows are the weighted sum of the flows at the beginning/end of the iteration
         """
-        # First calculate the voltage term
-        v_term_intercept = self._calculate_voltage_intercept_term(v_properties)
-
         # Calculate the bucket filling information for p and q
         total_p_load = sum([n.p_max for n in self.radial_graph.nodes])
         total_q_load = sum([n.q_max for n in self.radial_graph.nodes])
         active_info = self.radial_graph.get_active_bucket_filling_info(total_p_load)
         reactive_info = self.radial_graph.get_reactive_bucket_filling_info(total_q_load)
+        
+        # First calculate the voltage term
+        if total_p_load > 0.0 and total_q_load > 0.0:
+            loads = True
+        elif total_p_load < 0.0 and total_p_load < 0.0:
+            loads = False
+        else:
+            raise ValueError(f'Total p and q should either be positive or negative') 
+        
+        v_term_intercept = self._calculate_voltage_intercept_term(v_properties, loads)
 
         print("Bucket fill information:")
         print("Active power: ", active_info)
@@ -88,8 +95,11 @@ class CutCalculator:
         return slopes, intercepts
 
     @staticmethod
-    def _calculate_voltage_intercept_term(v_properties: dict) -> float:
-        return (v_properties['v_base'] ** 2 - v_properties['v_min'] ** 2) / 2
+    def _calculate_voltage_intercept_term(v_properties: dict, loads: bool) -> float:
+        if loads:
+            return (v_properties['v_base'] ** 2 - v_properties['v_min'] ** 2) / 2
+        else:
+            return (v_properties['v_base'] ** 2 - v_properties['v_max'] ** 2) / 2
 
     def _calculate_active_power_terms(self, active_bucket_filling_information: dict) -> Tuple[List[float]]:
         print("Calculate P terms")
